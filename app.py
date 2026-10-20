@@ -128,11 +128,71 @@ if st.button("✨ صياغة الرد الذكي لقفل الصفقة"):
     else:
         st.warning("⚠️ يرجى إدخال رد الشركة أولاً.")
 
-# --- قسم التوليد والتحكم الإضافي ---
+# --- قسم التوليد والتحكم الإضافي (المحدث والذكي) ---
 st.markdown("---")
 st.subheader("⚡ مولد الدفعات الجديدة والتحكم")
 industry = st.text_input("بادئة الشركات (مثال: global, tech):", "tech")
-total_leads = st.number_input("عدد الإيميلات المطلوبة للدفعة:", min_value=1000, max_value=2000000, value=50000, step=5000)
+total_leads = st.number_input("عدد الإيميلات المطلوبة للدفعة:", min_value=1, max_value=2000000, value=10, step=5)
 
-if st.button("🚀 توليد ورفع دفعة جديدة"):
-    st.success(f"✅ تم جدولة توليد ورفع دفعة جديدة لـ {industry} بعدد {total_leads:,} شركة بنجاح!")
+if st.button("🚀 توليد ورفع دفعة جديدة وجدولة السيرفر"):
+    try:
+        # 1. إنشاء أو الاتصال بقاعدة البيانات محلياً وضبط الجدول بالهيكل السليم 100%
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS companies (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT,
+                email TEXT,
+                status TEXT DEFAULT 'Ready',
+                reply_text TEXT
+            )
+        """)
+        
+        # 2. توليد إيميلات تجريبية ذكية بناءً على البادئة (Industry) المطلوبة
+        for i in range(1, total_leads + 1):
+            comp_name = f"{industry.capitalize()} Store {i}"
+            comp_email = f"contact{i}@{industry.lower()}123.com"
+            cursor.execute("""
+                INSERT INTO companies (name, email, status) 
+                VALUES (?, ?, 'Ready')
+            """, (comp_name, comp_email))
+            
+        conn.commit()
+        conn.close()
+        
+        st.success(f"✅ تم توليد {total_leads} شركة بنجاح في قاعدة البيانات المحلية!")
+
+        # 3. رفع ملف قاعدة البيانات المحدث فوراً إلى جيت هب (عشان worker.py يلاقي الداتا جاهزة)
+        if GITHUB_TOKEN and REPO_OWNER and REPO_NAME:
+            url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{DB_FILE}"
+            headers = {"Authorization": f"Bearer {GITHUB_TOKEN}", "Accept": "application/vnd.github+json"}
+            
+            # قراءة الملف المحول إلى بايتس ثم Base64
+            with open(DB_FILE, "rb") as f:
+                content_bytes = f.read()
+            encoded_content = base64.b64encode(content_bytes).decode("utf-8")
+
+            # جلب SHA الخاص بالملف القديم على جيت هب إن وجد لتحديثه
+            get_res = requests.get(url, headers=headers)
+            sha = get_res.json().get("sha") if get_res.status_code == 200 else None
+
+            data = {
+                "message": f"Update database with {total_leads} new leads from Streamlit",
+                "content": encoded_content,
+                "branch": "main"
+            }
+            if sha:
+                data["sha"] = sha
+
+            put_res = requests.put(url, headers=headers, json=data)
+            if put_res.status_code in [200, 201]:
+                st.success("☁️ تم رفع وتحديث قاعدة البيانات على جيت هب بنجاح تام! الروبوت جاهز للإرسال الآن.")
+            else:
+                st.warning(f"⚠️ تم الحفظ محلياً، ولكن فشل الرفع لجيت هب: {put_res.text}")
+        else:
+            st.warning("⚠️ بيانات جيت هب غير مكتملة، تم الحفظ محلياً فقط.")
+
+    except Exception as ex:
+        st.error(f"❌ حدث خطأ أثناء التوليد أو الرفع: {ex}")
