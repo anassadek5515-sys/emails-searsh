@@ -9,7 +9,7 @@ import pandas as pd
 st.set_page_config(page_title="B2B Empire Command Center", page_icon="🚀", layout="wide")
 
 st.title("🚀 لوحة قيادة الإمبراطورية والتحليلات الحية (B2B Command Center)")
-st.write("متابعة حية لحالة الإيميلات، الردود، والرسومات البيانية لأداء الحملات الصاروخية!")
+st.write("متابعة حية لحالة الإيميلات، الردود، والتحكم الكامل في صفقاتك!")
 
 DB_FILE = "companies.db"
 
@@ -22,6 +22,34 @@ except Exception:
     GITHUB_TOKEN = ""
     REPO_OWNER = ""
     REPO_NAME = ""
+
+# دالة ذكية لرفع قاعدة البيانات المحدثة أوتوماتيك لجيت هب
+def sync_db_to_github():
+    if GITHUB_TOKEN and REPO_OWNER and REPO_NAME:
+        try:
+            url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{DB_FILE}"
+            headers = {"Authorization": f"Bearer {GITHUB_TOKEN}", "Accept": "application/vnd.github+json"}
+            
+            with open(DB_FILE, "rb") as f:
+                content_bytes = f.read()
+            encoded_content = base64.b64encode(content_bytes).decode("utf-8")
+
+            get_res = requests.get(url, headers=headers)
+            sha = get_res.json().get("sha") if get_res.status_code == 200 else None
+
+            data = {
+                "message": "Update database from Streamlit dashboard",
+                "content": encoded_content,
+                "branch": "main"
+            }
+            if sha:
+                data["sha"] = sha
+
+            put_res = requests.put(url, headers=headers, json=data)
+            return put_res.status_code in [200, 201]
+        except Exception:
+            return False
+    return False
 
 # زرار لتحديث وسحب أحدث حالة لقاعدة البيانات من جيت هب
 if st.sidebar.button("🔄 مزامنة وجلب أحدث البيانات من السيرفر"):
@@ -50,14 +78,12 @@ if os.path.exists(DB_FILE):
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
         
-        # التأكد من وجود الجدول
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='companies';")
         table_exists = cursor.fetchone()
 
         if table_exists:
             df = pd.read_sql("SELECT * FROM companies", conn)
         else:
-            # إنشاء الجدول افتراضياً لمنع أي أخطاء
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS companies (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -87,14 +113,44 @@ col2.metric("⏳ الجاهز للإرسال (Ready)", f"{ready_count:,}")
 col3.metric("🚀 الإيميلات المرسلة (Sent)", f"{sent_count:,}")
 col4.metric("💬 الردود والصفقات (Replied)", f"{replied_count:,}")
 
-# --- التحليلات والرسومات البيانية ---
+# --- جدول إدارة وتحديث الردود يدوياً بكل سهولة ---
 st.markdown("---")
-st.subheader("📈 التحليلات البيانية لحالة الإرسال")
-if not df.empty and 'status' in df.columns:
-    status_counts = df['status'].value_counts()
-    st.bar_chart(status_counts)
+st.subheader("📋 جدول الشركات وإدارة الردود يدوياً")
+if not df.empty:
+    st.write("يمكنك تتبع الشركات وتحديث حالتها أو تسجيل الرد فور تلقيه في بريدك:")
+    
+    # عرض الجدول للتصفح
+    st.dataframe(df, use_container_width=True)
+
+    # نموذج سريع لتحديث حالة شركة معينة إلى Replied
+    st.markdown("#### ✍️ تحديث حالة شركة وردت عليك:")
+    with st.form("update_lead_form"):
+        lead_id_to_update = st.number_input("أدخل معرف الشركة (ID المراد تحديثه):", min_value=1, step=1)
+        new_reply_text = st.text_area("أدخل نص رد العميل:")
+        submit_update = st.form_submit_button("💾 تحديث الحالة إلى Replied وحفظ الرد")
+
+        if submit_update:
+            try:
+                conn = sqlite3.connect(DB_FILE)
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE companies 
+                    SET status = 'Replied', reply_text = ? 
+                    WHERE id = ?
+                """, (new_reply_text, lead_id_to_update))
+                conn.commit()
+                conn.close()
+                
+                # مزامنة تلقائية لجيت هب
+                if sync_db_to_github():
+                    st.success(f"✅ تم تحديث الشركة رقم {lead_id_to_update} بنجاح ومزامنتها مع السيرفر!")
+                    st.rerun()
+                else:
+                    st.warning("⚠️ تم التحديث محلياً، ولكن فشلت المزامنة التلقائية مع جيت هب.")
+            except Exception as ex:
+                st.error(f"❌ خطأ أثناء التحديث: {ex}")
 else:
-    st.info("ℹ️ لا توجد بيانات كافية لعرض الرسومات البيانية حالياً.")
+    st.info("ℹ️ لا توجد بيانات في قاعدة البيانات حالياً. استخدم المولد أدناه لإنشاء دفعة جديدة.")
 
 # --- صندوق الردود والشركات التي تفاعلت ---
 st.markdown("---")
@@ -109,7 +165,7 @@ if not df.empty and 'status' in df.columns:
                 st.write(f"**نص الرد الوارد:**")
                 st.info(row['reply_text'] if row['reply_text'] else "لا يوجد نص مسجل للرد.")
     else:
-        st.info("📭 لم ترد أي شركة حتى الآن. تابع الحملة، الردود ستظهر هنا تلقائياً فور فحص البريد!")
+        st.info("📭 لم ترد أي شركة مسجلة حتى الآن.")
 
 # مساعد صياغة الردود الذكي
 st.markdown("<br>", unsafe_allow_html=True)
@@ -121,14 +177,14 @@ if st.button("✨ صياغة الرد الذكي لقفل الصفقة"):
         💡 **الرد المقترح لإغلاق الصفقة:**
         
         "أهلاً بحضرتك،  
-        شكراً لاهتمامك بـ (Platform Name). بناءً على استفسارك، منصتنا مصممة خصيصاً لتتبع المنتجات الأكثر مبيعاً وتحليل المنافسين لحظياً، مما يوفر عليكم آلاف الدولارات في تجارب الإعلانات.  
+        شكراً لاهتمامك بـ منصتنا. بناءً على استفسارك، نظامنا مصمم خصيصاً لتتبع المنتجات الأكثر مبيعاً وتحليل المنافسين لحظياً، مما يوفر عليكم آلاف الدولارات في تجارب الإعلانات.  
         اشتراكنا بـ 200 دولار شهرياً، ويسعدنا جداً ترتيب مكالمة سريعة لمدة 3 دقائق اليوم لنعرض لك كيف يمكننا مضاعفة مبيعات متجركم فوراً.  
         هل يناسبكم موعد غداً الساعة 2 ظهراً؟"
         """)
     else:
         st.warning("⚠️ يرجى إدخال رد الشركة أولاً.")
 
-# --- قسم التوليد والتحكم الإضافي (المحدث والذكي) ---
+# --- قسم التوليد والتحكم الإضافي ---
 st.markdown("---")
 st.subheader("⚡ مولد الدفعات الجديدة والتحكم")
 industry = st.text_input("بادئة الشركات (مثال: global, tech):", "tech")
@@ -136,7 +192,6 @@ total_leads = st.number_input("عدد الإيميلات المطلوبة للد
 
 if st.button("🚀 توليد ورفع دفعة جديدة وجدولة السيرفر"):
     try:
-        # 1. إنشاء أو الاتصال بقاعدة البيانات محلياً وضبط الجدول بالهيكل السليم 100%
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
         
@@ -150,7 +205,6 @@ if st.button("🚀 توليد ورفع دفعة جديدة وجدولة السي
             )
         """)
         
-        # 2. توليد إيميلات تجريبية ذكية بناءً على البادئة (Industry) المطلوبة
         for i in range(1, total_leads + 1):
             comp_name = f"{industry.capitalize()} Store {i}"
             comp_email = f"contact{i}@{industry.lower()}123.com"
@@ -164,35 +218,11 @@ if st.button("🚀 توليد ورفع دفعة جديدة وجدولة السي
         
         st.success(f"✅ تم توليد {total_leads} شركة بنجاح في قاعدة البيانات المحلية!")
 
-        # 3. رفع ملف قاعدة البيانات المحدث فوراً إلى جيت هب (عشان worker.py يلاقي الداتا جاهزة)
-        if GITHUB_TOKEN and REPO_OWNER and REPO_NAME:
-            url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{DB_FILE}"
-            headers = {"Authorization": f"Bearer {GITHUB_TOKEN}", "Accept": "application/vnd.github+json"}
-            
-            # قراءة الملف المحول إلى بايتس ثم Base64
-            with open(DB_FILE, "rb") as f:
-                content_bytes = f.read()
-            encoded_content = base64.b64encode(content_bytes).decode("utf-8")
-
-            # جلب SHA الخاص بالملف القديم على جيت هب إن وجد لتحديثه
-            get_res = requests.get(url, headers=headers)
-            sha = get_res.json().get("sha") if get_res.status_code == 200 else None
-
-            data = {
-                "message": f"Update database with {total_leads} new leads from Streamlit",
-                "content": encoded_content,
-                "branch": "main"
-            }
-            if sha:
-                data["sha"] = sha
-
-            put_res = requests.put(url, headers=headers, json=data)
-            if put_res.status_code in [200, 201]:
-                st.success("☁️ تم رفع وتحديث قاعدة البيانات على جيت هب بنجاح تام! الروبوت جاهز للإرسال الآن.")
-            else:
-                st.warning(f"⚠️ تم الحفظ محلياً، ولكن فشل الرفع لجيت هب: {put_res.text}")
+        if sync_db_to_github():
+            st.success("☁️ تم رفع وتحديث قاعدة البيانات على جيت هب بنجاح تام!")
+            st.rerun()
         else:
-            st.warning("⚠️ بيانات جيت هب غير مكتملة، تم الحفظ محلياً فقط.")
+            st.warning("⚠️ تم الحفظ محلياً، ولكن فشل الرفع لجيت هب.")
 
     except Exception as ex:
-        st.error(f"❌ حدث خطأ أثناء التوليد أو الرفع: {ex}")
+        st.error(ferror := f"❌ حدث خطأ أثناء التوليد أو الرفع: {ex}")
