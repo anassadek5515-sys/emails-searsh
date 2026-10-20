@@ -12,7 +12,7 @@ st.write("استخرج إيميلات الشركات واضغط زرار واح�
 
 industry = st.text_input("بادئة الشركات (مثال: global, tech):", "tech")
 total_leads = st.number_input(
-    "عدد الإيميلات المطلوبة (يُفضل 50,000 للتجربة السريعة):", 
+    "عدد الإيميلات المطلوبة:", 
     min_value=1000, 
     max_value=2000000, 
     value=50000, 
@@ -36,7 +36,7 @@ if st.button("⚡ توليد وإرسال للمشروع التاني أوتوم
     if not GITHUB_TOKEN:
         st.error("❌ لا يمكن المتابعة لعدم توفر بيانات الاتصال الآمنة في الـ Secrets.")
     else:
-        # 1. مرحلة التوليد وبناء قاعدة البيانات SQLite
+        # 1. مرحلة التوليد وبناء قاعدة البيانات SQLite متوافقة مع worker.py
         with st.spinner("جاري استخراج البيانات وضبط قاعدة البيانات المحلية..."):
             if os.path.exists(DB_FILE):
                 os.remove(DB_FILE)
@@ -44,15 +44,16 @@ if st.button("⚡ توليد وإرسال للمشروع التاني أوتوم
             conn = sqlite3.connect(DB_FILE)
             cursor = conn.cursor()
             
+            # تم ضبط اسم الجدول والأعمدة ليتطابق مع الـ Worker تماماً
             cursor.execute("""
-                CREATE TABLE IF NOT EXISTS emails (
+                CREATE TABLE IF NOT EXISTS companies (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     domain TEXT,
                     email TEXT UNIQUE,
                     status TEXT
                 )
             """)
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_email ON emails(email);")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_email ON companies(email);")
             
             tlds = [".com", ".net", ".org", ".co", ".io"]
             prefixes = ["support", "contact", "hello", "sales", "info", "founders", "team"]
@@ -73,12 +74,12 @@ if st.button("⚡ توليد وإرسال للمشروع التاني أوتوم
                     counter += 1
                     
                     if len(batch) >= 10000:
-                        cursor.executemany("INSERT OR IGNORE INTO emails (domain, email, status) VALUES (?, ?, ?)", batch)
+                        cursor.executemany("INSERT OR IGNORE INTO companies (domain, email, status) VALUES (?, ?, ?)", batch)
                         conn.commit()
                         batch = []
                         
             if batch:
-                cursor.executemany("INSERT OR IGNORE INTO emails (domain, email, status) VALUES (?, ?, ?)", batch)
+                cursor.executemany("INSERT OR IGNORE INTO companies (domain, email, status) VALUES (?, ?, ?)", batch)
                 conn.commit()
                 
             conn.close()
@@ -111,7 +112,7 @@ if st.button("⚡ توليد وإرسال للمشروع التاني أوتوم
                     data = {
                         "message": "Auto-sync new companies database from Search App 🚀",
                         "content": content,
-                        "branch": "main"  # تأكد أن الفرع الأساسي عندك هو main أو أبدله بـ master
+                        "branch": "main"
                     }
                     if sha:
                         data["sha"] = sha
