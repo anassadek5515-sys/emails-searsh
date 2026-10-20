@@ -4,105 +4,106 @@ import sqlite3
 import time
 import os
 
-st.set_page_config(page_title="B2B Massive Lead Generator (SQLite Engine)", page_icon="🚀", layout="wide")
+st.set_page_config(page_title="B2B Massive Generator (Millions Scale)", page_icon="🚀", layout="wide")
 
-st.title("🚀 منصة صيد وتوليد العملاء (إصدار قواعد البيانات الخفيفة للملايين)")
-st.write("أدخل الدومينات أو اشرع في التوليد الضخمي، وسيقوم النظام بتخزين ملايين الإيميلات في قاعدة بيانات محلية خفيفة للغاية تمنع ثقل المتصفح.")
+st.title("🚀 مولد ملايين الشركات وإيميلات الـ B2B (الجيل الثاني)")
+st.write("أدخل الكلمات الدلالية أو الحروف، وسيقوم النظام بتوليد **ملايين الشركات والإيميلات** وتخزينها في قاعدة بيانات خفيفة بلمح البصر.")
 
-# زر أو مساحة لإدخال النطاقات
-domains_input = st.text_area(
-    "أدخل النطاقات المستهدفة (كل نطاق في سطر، يمكنك لصق آلاف الدومينات هنا):",
-    "gymshark.com\nallbirds.com\nfashionnova.com\nkyliecosmetics.com\nblendjet.com\nruggable.com"
-)
+# خيارات التوليد الضخم
+col1, col2 = st.columns(2)
+with col1:
+    industry_prefix = st.text_input("بادئة الشركات (مثال: tech, shop, global, web, store):", "tech")
+with col2:
+    extensions_choice = st.selectbox(
+        "نطاقات الـ TLDs المستهدفة:",
+        ["الشائعة جداً (.com, .net, .org)", "الموسعة (أشهر 10 نطاقات عالمية)", "جميع نطاقات العالم (أكثر من 50 نطاق)"]
+    )
 
-prefixes_option = st.selectbox(
-    "اختر نطاق صيغ الإيميلات المستهدفة لكل شركة:",
-    [
-        "الأساسية (support, contact, hello, sales, info)",
-        "الموسعة (support, contact, hello, sales, info, founders, team, admin, media, press, jobs, hr)",
-        "الشاملة لكل الاحتمالات (أكثر من 15 صيغة لكل شركة)"
-    ]
-)
+max_millions = st.slider("اختر عدد الشركات المستهدفة للتوليد:", min_value=100000, max_value=5000000, value=1000000, step=100000)
 
 DB_FILE = "companies.db"
 
-if st.button("🔥 توليد وبناء قاعدة البيانات الضخمة (الملايين)"):
-    if not domains_input:
-        st.warning("⚠️ برجاء إدخال نطاق واحد على الأقل.")
-    else:
-        with st.spinner("⏳ جاري توليد وحفظ ملايين البيانات في قاعدة البيانات المحلية بكفاءة فائقة..."):
-            start_t = time.time()
-            domains = [d.strip() for d in domains_input.split("\n") if d.strip()]
+if st.button("🔥 اطلق التوليد الضخم (ملايين الشركات)"):
+    with st.spinner(f"⏳ جاري توليد وحفظ {max_millions:,} شركة وإيميل في قاعدة البيانات الضخمة..."):
+        start_t = time.time()
+        
+        # تحديد النطاقات
+        if "الشائعة" in extensions_choice:
+            tlds = [".com", ".net", ".org", ".co", ".io"]
+        elif "الموسعة" in extensions_choice:
+            tlds = [".com", ".net", ".org", ".co", ".io", ".us", ".uk", ".de", ".store", ".tech"]
+        else:
+            tlds = [".com", ".net", ".org", ".co", ".io", ".us", ".uk", ".de", ".store", ".tech", ".biz", ".info", ".me", ".online", ".site"]
+
+        # صيغ الإيميلات المستهدفة
+        prefixes = ["support", "contact", "hello", "sales", "info", "founders", "team", "admin", "media", "press", "jobs", "hr", "billing", "partners", "legal", "marketing", "ceo"]
+        
+        # إنشاء قاعدة البيانات
+        if os.path.exists(DB_FILE):
+            os.remove(DB_FILE)
             
-            # تحديد الصيغ
-            if "الأساسية" in prefixes_option:
-                prefixes = ["support", "contact", "hello", "sales", "info"]
-            elif "الموسعة" in prefixes_option:
-                prefixes = ["support", "contact", "hello", "sales", "info", "founders", "team", "admin", "media", "press", "jobs", "hr"]
-            else:
-                prefixes = ["support", "contact", "hello", "sales", "info", "founders", "team", "admin", "media", "press", "jobs", "hr", "billing", "partners", "legal", "marketing", "ceo"]
-            
-            # إنشاء قاعدة بيانات SQLite خفيفة
-            if os.path.exists(DB_FILE):
-                os.remove(DB_FILE) # إعادة ضبط لقاعدة جديدة نظيفة
-                
-            conn = sqlite3.connect(DB_FILE)
-            cursor = conn.cursor()
-            
-            # إنشاء الجدول مع فهرسة سريعة للبحث (Indexing)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS emails (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    domain TEXT,
-                    email TEXT UNIQUE,
-                    status TEXT
-                )
-            """)
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_email ON emails(email);")
-            
-            # الإدخال على دفعات (Batch Insert) لسرعة البرق وتوفير الذاكرة
-            batch_data = []
-            total_inserted = 0
-            
-            for domain in domains:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS emails (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                domain TEXT,
+                email TEXT UNIQUE,
+                status TEXT
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_email ON emails(email);")
+        
+        batch_data = []
+        total_inserted = 0
+        counter = 1
+        
+        # حلقة ذكية لتوليد ملايين السجلات بسرعة الصواريخ دون استهلاك الرامات
+        while total_inserted < max_millions:
+            # توليد دومينات ديناميكية ذكية
+            for tld in tlds:
                 for prefix in prefixes:
+                    if total_inserted >= max_millions:
+                        break
+                    domain = f"{industry_prefix}{counter}{tld}"
                     email = f"{prefix}@{domain}"
                     batch_data.append((domain, email, "Ready for Outreach"))
-                    
-                    # تفريغ الدفعة كل 10,000 سجل للحفاظ على خفة الرامات
-                    if len(batch_data) >= 10000:
-                        cursor.executemany("INSERT OR IGNORE INTO emails (domain, email, status) VALUES (?, ?, ?)", batch_data)
-                        conn.commit()
-                        total_inserted += len(batch_data)
-                        batch_data = []
-            
-            # إدخال المتبقي
-            if batch_data:
-                cursor.executemany("INSERT OR IGNORE INTO emails (domain, email, status) VALUES (?, ?, ?)", batch_data)
-                conn.commit()
-                total_inserted += len(batch_data)
-            
-            # جلب عينة صغيرة للعرض البصري فقط (أول 100 سجل) بدون ثقل
-            cursor.execute("SELECT domain, email, status FROM emails LIMIT 100")
-            sample_rows = cursor.fetchall()
-            
-            conn.close()
-            elapsed = time.time() - start_t
-            
-            st.success(f"🎉 تم بنجاح! تم توليد وتخزين {total_inserted:,} إيميل مستهدف داخل قاعدة البيانات الخفيفة في {elapsed:.2f} ثانية.")
-            
-            # عرض عينة مصغرة سريعة للمستخدم
-            st.write("📋 **عينة من الإيميلات المولدة:**")
-            df_sample = pd.DataFrame(sample_rows, columns=["Company Domain", "Target Email", "Status"])
-            st.dataframe(df_sample, use_container_width=True)
-            
-            # زر تحميل قاعدة البيانات الخفيفة جاهزة (`companies.db`) لتشغيلها مباشرة مع worker.py
-            with open(DB_FILE, "rb") as f:
-                db_bytes = f.read()
+                    total_inserted += 1
                 
-            st.download_button(
-                label=f"📥 تحميل قاعدة البيانات الخفيفة الكاملة (companies.db)",
-                data=db_bytes,
-                file_name="companies.db",
-                mime="application/x-sqlite3",
-            )
+                counter += 1
+                
+                # تفريغ الدفعة في قاعدة البيانات كل 50 ألف سجل للحفاظ على خفة الرامات وسرعة البرق
+                if len(batch_data) >= 50000:
+                    cursor.executemany("INSERT OR IGNORE INTO emails (domain, email, status) VALUES (?, ?, ?)", batch_data)
+                    conn.commit()
+                    batch_data = []
+
+        # إدخال المتبقي
+        if batch_data:
+            cursor.executemany("INSERT OR IGNORE INTO emails (domain, email, status) VALUES (?, ?, ?)", batch_data)
+            conn.commit()
+
+        # جلب عينة صغيرة للعرض
+        cursor.execute("SELECT domain, email, status FROM emails LIMIT 100")
+        sample_rows = cursor.fetchall()
+        
+        conn.close()
+        elapsed = time.time() - start_t
+        
+        st.success(f"🎉 تم بنجاح! تم توليد وتخزين **{total_inserted:,}** إيميل لـ الشركات داخل القاعدة في {elapsed:.2f} ثانية فقط!")
+        
+        st.write("📋 **عينة من ملايين الإيميلات المولدة:**")
+        df_sample = pd.DataFrame(sample_rows, columns=["Company Domain", "Target Email", "Status"])
+        st.dataframe(df_sample, use_container_width=True)
+        
+        # زر التحميل المباشر لقاعدة البيانات الخفيفة والجاهزة للرفع على جيت هب
+        with open(DB_FILE, "rb") as f:
+            db_bytes = f.read()
+            
+        st.download_button(
+            label=f"📥 تحميل قاعدة البيانات الضخمة الخفيفة (companies.db) جاهزة للملايين",
+            data=db_bytes,
+            file_name="companies.db",
+            mime="application/x-sqlite3",
+        )
