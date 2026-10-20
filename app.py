@@ -90,8 +90,8 @@ if st.button("⚡ توليد دفعة صارخية وإرسالها للمشرو
         if file_size_mb > 25:
             st.warning("⚠️ الملف يتجاوز 25 ميجابايت (الحد الأقصى المسموح به للـ API). يرجى تقليل عدد الإيميلات.")
         else:
-            # 3. مرحلة الرفع الأوتوماتيكي عبر GitHub API
-            with st.spinner("🚀 جاري رفع ملف الشركات لمستودع الإرسال Sell-saas..."):
+            # 3. مرحلة الرفع الأوتوماتيكي عبر GitHub API والتشغيل الفوري
+            with st.spinner("🚀 جاري رفع ملف الشركات لمستودع الإرسال Sell-saas وتفعيل الإطلاق الفوري..."):
                 try:
                     with open(DB_FILE, "rb") as f:
                         content = base64.b64encode(f.read()).decode("utf-8")
@@ -118,7 +118,19 @@ if st.button("⚡ توليد دفعة صارخية وإرسالها للمشرو
                     put_res = requests.put(url, headers=headers, json=data)
                     
                     if put_res.status_code in [200, 201]:
-                        st.success("🎉 تم توليد مئات الآلاف من الـ Leads ورفعها بنجاح صاروخي لمستودع الإرسال! الـ Worker هيسحبها فوراً.")
+                        st.success("🎉 تم توليد ورفع ملف الـ Leads بنجاح صاروخي!")
+                        
+                        # --- 🚀 الأمر السحري: إرسال إشارة تشغيل الـ Worker فوراً ---
+                        workflow_url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/actions/workflows/main.yml/dispatches"
+                        trigger_data = {"ref": "main"}
+                        trigger_res = requests.post(workflow_url, headers=headers, json=trigger_data)
+                        
+                        if trigger_res.status_code == 204:
+                            st.success("🚀 تم إطلاق الـ Worker فوراً! الإيميلات بدأت تطير دلوقتي حالاً بطريقة آلية بالكامل!")
+                        else:
+                            st.warning("⚠️ تم رفع الملف بنجاح، ولكن تعذر التشغيل الفوري التلقائي (سيعمل أوتوماتيكياً حسب جدول الربع ساعة).")
+                        # ----------------------------------------------------
+                        
                     else:
                         st.error(f"❌ فشل الرفع من جيت هب (كود: {put_res.status_code}): {put_res.json().get('message', 'خطأ غير معروف')}")
                 except Exception as e:
