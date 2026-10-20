@@ -7,12 +7,12 @@ import requests
 # إعدادات صفحة الموقع
 st.set_page_config(page_title="B2B Lead Search & Auto-Sync", page_icon="🚀", layout="centered")
 
-st.title("🚀 محرك البحث والاستخراج (متصل أوتوماتيك بمشروع الإرسال)")
-st.write("استخرج إيميلات الشركات واضغط زرار واحد لترسلها مباشرة لمشروع الإرسال `Sell-saas` بدون أي نقل يدوي!")
+st.title("🚀 محرك البحث والاستخراج (الإمبراطورية الذاتية)")
+st.write("المنظومة متصلة أوتوماتيك بمشروع الإرسال `Sell-saas` لضمان ضخ Leads بلا توقف!")
 
 industry = st.text_input("بادئة الشركات (مثال: global, tech):", "tech")
 total_leads = st.number_input(
-    "عدد الإيميلات المطلوبة:", 
+    "عدد الإيميلات المطلوبة للدفعة:", 
     min_value=1000, 
     max_value=2000000, 
     value=50000, 
@@ -32,19 +32,18 @@ except Exception:
 
 DB_FILE = "companies.db"
 
-if st.button("⚡ توليد وإرسال للمشروع التاني أوتوماتيك"):
+if st.button("⚡ توليد دفعة صارخية وإرسالها للمشروع أوتوماتيك"):
     if not GITHUB_TOKEN:
         st.error("❌ لا يمكن المتابعة لعدم توفر بيانات الاتصال الآمنة في الـ Secrets.")
     else:
-        # 1. مرحلة التوليد وبناء قاعدة البيانات SQLite متوافقة مع worker.py
-        with st.spinner("جاري استخراج البيانات وضبط قاعدة البيانات المحلية..."):
+        # 1. مرحلة التوليد وبناء قاعدة البيانات SQLite
+        with st.spinner("جاري استخراج البيانات وضبط قاعدة البيانات المحلية بسرعة فائقة..."):
             if os.path.exists(DB_FILE):
                 os.remove(DB_FILE)
                 
             conn = sqlite3.connect(DB_FILE)
             cursor = conn.cursor()
             
-            # تم ضبط اسم الجدول والأعمدة ليتطابق مع الـ Worker تماماً
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS companies (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -73,7 +72,7 @@ if st.button("⚡ توليد وإرسال للمشروع التاني أوتوم
                         count += 1
                     counter += 1
                     
-                    if len(batch) >= 10000:
+                    if len(batch) >= 15000:
                         cursor.executemany("INSERT OR IGNORE INTO companies (domain, email, status) VALUES (?, ?, ?)", batch)
                         conn.commit()
                         batch = []
@@ -84,15 +83,15 @@ if st.button("⚡ توليد وإرسال للمشروع التاني أوتوم
                 
             conn.close()
 
-        # 2. فحص حجم الملف (لتفادي قيود جيت هب 25 ميجابايت)
+        # 2. فحص حجم الملف
         file_size_mb = os.path.getsize(DB_FILE) / (1024 * 1024)
         st.info(f"📦 حجم قاعدة البيانات التي تم توليدها: **{file_size_mb:.2f} MB**")
 
         if file_size_mb > 25:
-            st.warning("⚠️ الملف يتجاوز 25 ميجابايت (الحد الأقصى المسموح به للـ API). يرجى تقليل عدد الإيميلات للدفعة الواحدة.")
+            st.warning("⚠️ الملف يتجاوز 25 ميجابايت (الحد الأقصى المسموح به للـ API). يرجى تقليل عدد الإيميلات.")
         else:
             # 3. مرحلة الرفع الأوتوماتيكي عبر GitHub API
-            with st.spinner("🚀 جاري رفع ملف الشركات لمستودع الإرسال Sell-saas عبر جيت هب..."):
+            with st.spinner("🚀 جاري رفع ملف الشركات لمستودع الإرسال Sell-saas..."):
                 try:
                     with open(DB_FILE, "rb") as f:
                         content = base64.b64encode(f.read()).decode("utf-8")
@@ -103,25 +102,23 @@ if st.button("⚡ توليد وإرسال للمشروع التاني أوتوم
                         "Accept": "application/vnd.github+json"
                     }
                     
-                    # جلب الـ SHA للملف القديم (مطلوب من جيت هب لتحديث الملفات الموجودة)
                     get_res = requests.get(url, headers=headers)
                     sha = None
                     if get_res.status_code == 200:
                         sha = get_res.json().get("sha")
                     
                     data = {
-                        "message": "Auto-sync new companies database from Search App 🚀",
+                        "message": "Auto-sync massive new companies database 🚀",
                         "content": content,
                         "branch": "main"
                     }
                     if sha:
                         data["sha"] = sha
                         
-                    # إرسال طلب التحديث (PUT)
                     put_res = requests.put(url, headers=headers, json=data)
                     
                     if put_res.status_code in [200, 201]:
-                        st.success("🎉 تم توليد البيانات ورفعها بنجاح مذهل إلى مستودع الإرسال `Sell-saas`! مشروع الإرسال سيلتقطها فوراً.")
+                        st.success("🎉 تم توليد مئات الآلاف من الـ Leads ورفعها بنجاح صاروخي لمستودع الإرسال! الـ Worker هيسحبها فوراً.")
                     else:
                         st.error(f"❌ فشل الرفع من جيت هب (كود: {put_res.status_code}): {put_res.json().get('message', 'خطأ غير معروف')}")
                 except Exception as e:
