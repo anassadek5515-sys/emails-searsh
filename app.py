@@ -1,109 +1,109 @@
 import streamlit as st
-import pandas as pd
 import sqlite3
-import time
 import os
+import base64
+import requests
 
-st.set_page_config(page_title="B2B Massive Generator (Millions Scale)", page_icon="🚀", layout="wide")
+st.set_page_config(page_title="B2B Lead Search & Auto-Sync", page_icon="🚀", layout="centered")
 
-st.title("🚀 مولد ملايين الشركات وإيميلات الـ B2B (الجيل الثاني)")
-st.write("أدخل الكلمات الدلالية أو الحروف، وسيقوم النظام بتوليد **ملايين الشركات والإيميلات** وتخزينها في قاعدة بيانات خفيفة بلمح البصر.")
+st.title("🚀 محرك البحث والاستخراج (متصل أوتوماتيك بمشروع الإرسال بأمان)")
+st.write("استخرج إيميلات الشركات واضغط زرار واحد لترسلها مباشرة لمشروع الإرسال بأمان تام!")
 
-# خيارات التوليد الضخم
-col1, col2 = st.columns(2)
-with col1:
-    industry_prefix = st.text_input("بادئة الشركات (مثال: tech, shop, global, web, store):", "tech")
-with col2:
-    extensions_choice = st.selectbox(
-        "نطاقات الـ TLDs المستهدفة:",
-        ["الشائعة جداً (.com, .net, .org)", "الموسعة (أشهر 10 نطاقات عالمية)", "جميع نطاقات العالم (أكثر من 50 نطاق)"]
-    )
+industry = st.text_input("بادئة الشركات (مثال: global, tech):", "tech")
+total_leads = st.number_input("عدد الإيميلات المطلوبة:", min_value=10000, max_value=2000000, value=100000, step=10000)
 
-max_millions = st.slider("اختر عدد الشركات المستهدفة للتوليد:", min_value=100000, max_value=5000000, value=1000000, step=100000)
+# سحب البيانات السرية بأمان من إعدادات Streamlit
+try:
+    GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
+    REPO_OWNER = st.secrets["REPO_OWNER"]
+    REPO_NAME = st.secrets["REPO_NAME"]
+except Exception:
+    st.error("⚠️ تنبيه: يرجى ضبط أمان الـ Secrets في إعدادات التطبيق أولاً!")
+    GITHUB_TOKEN = ""
+    REPO_OWNER = ""
+    REPO_NAME = ""
 
 DB_FILE = "companies.db"
 
-if st.button("🔥 اطلق التوليد الضخم (ملايين الشركات)"):
-    with st.spinner(f"⏳ جاري توليد وحفظ {max_millions:,} شركة وإيميل في قاعدة البيانات الضخمة..."):
-        start_t = time.time()
-        
-        # تحديد النطاقات
-        if "الشائعة" in extensions_choice:
+if st.button("⚡ توليد وإرسال للمشروع التاني أوتوماتيك"):
+    if not GITHUB_TOKEN:
+        st.error("❌ لا يمكن المتابعة لعدم توفر بيانات الاتصال الآمنة.")
+    else:
+        with st.spinner("جاري استخراج البيانات وضبطها..."):
+            if os.path.exists(DB_FILE):
+                os.remove(DB_FILE)
+                
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS emails (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    domain TEXT,
+                    email TEXT UNIQUE,
+                    status TEXT
+                )
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_email ON emails(email);")
+            
             tlds = [".com", ".net", ".org", ".co", ".io"]
-        elif "الموسعة" in extensions_choice:
-            tlds = [".com", ".net", ".org", ".co", ".io", ".us", ".uk", ".de", ".store", ".tech"]
-        else:
-            tlds = [".com", ".net", ".org", ".co", ".io", ".us", ".uk", ".de", ".store", ".tech", ".biz", ".info", ".me", ".online", ".site"]
-
-        # صيغ الإيميلات المستهدفة
-        prefixes = ["support", "contact", "hello", "sales", "info", "founders", "team", "admin", "media", "press", "jobs", "hr", "billing", "partners", "legal", "marketing", "ceo"]
-        
-        # إنشاء قاعدة البيانات
-        if os.path.exists(DB_FILE):
-            os.remove(DB_FILE)
+            prefixes = ["support", "contact", "hello", "sales", "info", "founders", "team"]
             
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS emails (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                domain TEXT,
-                email TEXT UNIQUE,
-                status TEXT
-            )
-        """)
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_email ON emails(email);")
-        
-        batch_data = []
-        total_inserted = 0
-        counter = 1
-        
-        # حلقة ذكية لتوليد ملايين السجلات بسرعة الصواريخ دون استهلاك الرامات
-        while total_inserted < max_millions:
-            # توليد دومينات ديناميكية ذكية
-            for tld in tlds:
-                for prefix in prefixes:
-                    if total_inserted >= max_millions:
-                        break
-                    domain = f"{industry_prefix}{counter}{tld}"
-                    email = f"{prefix}@{domain}"
-                    batch_data.append((domain, email, "Ready for Outreach"))
-                    total_inserted += 1
-                
-                counter += 1
-                
-                # تفريغ الدفعة في قاعدة البيانات كل 50 ألف سجل للحفاظ على خفة الرامات وسرعة البرق
-                if len(batch_data) >= 50000:
-                    cursor.executemany("INSERT OR IGNORE INTO emails (domain, email, status) VALUES (?, ?, ?)", batch_data)
-                    conn.commit()
-                    batch_data = []
-
-        # إدخال المتبقي
-        if batch_data:
-            cursor.executemany("INSERT OR IGNORE INTO emails (domain, email, status) VALUES (?, ?, ?)", batch_data)
-            conn.commit()
-
-        # جلب عينة صغيرة للعرض
-        cursor.execute("SELECT domain, email, status FROM emails LIMIT 100")
-        sample_rows = cursor.fetchall()
-        
-        conn.close()
-        elapsed = time.time() - start_t
-        
-        st.success(f"🎉 تم بنجاح! تم توليد وتخزين **{total_inserted:,}** إيميل لـ الشركات داخل القاعدة في {elapsed:.2f} ثانية فقط!")
-        
-        st.write("📋 **عينة من ملايين الإيميلات المولدة:**")
-        df_sample = pd.DataFrame(sample_rows, columns=["Company Domain", "Target Email", "Status"])
-        st.dataframe(df_sample, use_container_width=True)
-        
-        # زر التحميل المباشر لقاعدة البيانات الخفيفة والجاهزة للرفع على جيت هب
-        with open(DB_FILE, "rb") as f:
-            db_bytes = f.read()
+            batch = []
+            count = 0
+            counter = 1
             
-        st.download_button(
-            label=f"📥 تحميل قاعدة البيانات الضخمة الخفيفة (companies.db) جاهزة للملايين",
-            data=db_bytes,
-            file_name="companies.db",
-            mime="application/x-sqlite3",
-        )
+            while count < total_leads:
+                for tld in tlds:
+                    for prefix in prefixes:
+                        if count >= total_leads:
+                            break
+                        domain = f"{industry}{counter}{tld}"
+                        email = f"{prefix}@{domain}"
+                        batch.append((domain, email, "Ready"))
+                        count += 1
+                    counter += 1
+                    
+                    if len(batch) >= 10000:
+                        cursor.executemany("INSERT OR IGNORE INTO emails (domain, email, status) VALUES (?, ?, ?)", batch)
+                        conn.commit()
+                        batch = []
+                        
+            if batch:
+                cursor.executemany("INSERT OR IGNORE INTO emails (domain, email, status) VALUES (?, ?, ?)", batch)
+                conn.commit()
+                
+            conn.close()
+
+        # رفع الملف أوتوماتيك لمشروع الإرسال التاني عبر GitHub API
+        with st.spinner("🚀 جاري رفع ملف الشركات للمشروع التاني عبر جيت هب..."):
+            try:
+                with open(DB_FILE, "rb") as f:
+                    content = base64.b64encode(f.read()).decode("utf-8")
+                    
+                url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{DB_FILE}"
+                headers = {
+                    "Authorization": f"Bearer {GITHUB_TOKEN}",
+                    "Accept": "application/vnd.github+json"
+                }
+                
+                # التحقق من وجود الملف القديم لجلب الـ SHA
+                get_res = requests.get(url, headers=headers)
+                sha = get_res.json().get("sha") if get_res.status_code == 200 else None
+                
+                data = {
+                    "message": "Auto-sync new companies database from Search App 🚀",
+                    "content": content,
+                    "branch": "main"
+                }
+                if sha:
+                    data["sha"] = sha
+                    
+                put_res = requests.put(url, headers=headers, json=data)
+                
+                if put_res.status_code in [200, 201]:
+                    st.success("🎉 تم توليد البيانات ورفعها بنجاح مذهل إلى مشروع الإرسال! مشروع الإرسال سيلتقطها فوراً في دورته القادمة.")
+                else:
+                    st.error(f"❌ فشل الرفع: {put_res.json().get('message', 'خطأ غير معروف')}")
+            except Exception as e:
+                st.error(f"❌ حدث خطأ أثناء الاتصال بجيت هب: {e}")
